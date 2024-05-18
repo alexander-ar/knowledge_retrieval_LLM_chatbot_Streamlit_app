@@ -1,2 +1,2 @@
-# streamlit_LLM_document_QA_app
-LLM question answering application based on the contents of the uploaded document built with Streamlit
+# Chat with your document application with Streamlit
+LLM question answering RAG application based on the contents of the uploaded document built with Streamlit
