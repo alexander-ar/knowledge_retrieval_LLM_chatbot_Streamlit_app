@@ -1,8 +1,12 @@
 openai
 langchain
 langchain_openai
+langchain-community
 chromadb
-docx2txt
-pypdf
 streamlit
 tiktoken
+argparse
+PyPDF2
+python-docx
+textract
+python-dotenv
