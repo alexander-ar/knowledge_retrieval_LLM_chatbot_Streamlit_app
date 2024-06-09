@@ -74,46 +74,6 @@ def process_input_file(input_file_path):
     return temp_file_path
 
 
-# helper function to ask questions to LLM chain
-def answer_question(q, chain):
-    '''
-    answer_question() is a helper function to ask a single question from
-    a LLM chain
-    
-    Parameters:
-        q (str): user's question
-        crc (langchain.chains.conversational_retrieval.base.ConversationalRetrievalChain):
-            ConversationalRetrievalChain object from Langchain
-    
-    '''
-    result = chain.invoke({'question': q})
-    return result['answer']
-
-
-def ask_and_get_answer(vector_store, q, k = 5):
-     # initialize LLM
-    llm = ChatOpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        model = os.getenv("OPENAI_DEPLOYMENT_NAME"), 
-        temperature = 0)
-    # Configure vector store to act as a retriever (finding similar items, returning top 5)
-    retriever = vector_store.as_retriever(
-        search_type = 'similarity', 
-        search_kwargs={'k': k})
-    # Create a memory buffer to track the conversation
-    memory = ConversationBufferMemory(
-        memory_key = 'chat_history', 
-        return_messages = True)
-
-    chain = RetrievalQA.from_chain_type(
-        llm = llm, 
-        chain_type = "stuff", 
-        retriever = retriever)
-
-    answer = chain.invoke(q)
-    return answer['result']
-
-
 # loading PDF, DOCX and TXT files as LangChain Documents
 def load_document(file):
     '''
@@ -164,103 +124,6 @@ def create_embeddings(chunks):
     return vector_store
 
 
-
-# main app function
-def main(input_text_file, remove_temp_file = True):
-    '''
-    main() function takes the text file with content and allows the user
-    to ask questions through command line, then prints out the answer to each 
-    question.
-    
-    Parameters:
-        input_text_file (str): path to the input text file with content
-        remove_temp_file (bool): if True temporary file with processed content
-            is deleted from temp directory
-    
-    Returns:
-        printed output with the GPT answer to each question
-    '''
-    # process input file
-    processed_text_file_path = process_input_file(input_text_file)
-    
-    data = load_document(processed_text_file_path)
-    if data is None:
-        print(f"Failed to load document: {processed_text_file_path}")
-    
-    # split the text using RecursiveCharacterTextSplitter
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size = 1024, chunk_overlap = 80)
-    chunks = text_splitter.split_documents(data)
-    
-    # Instantiate an embedding model from AzureOpenAI
-    embeddings = OpenAIEmbeddings(
-        model = os.getenv("TEXT_EMBEDDING_MODEL"), 
-        dimensions = 1536)  
-
-    # Create an in-memory Chroma vector store using the provided text chunks 
-    # and the embedding model 
-    vector_store = Chroma.from_documents(documents = chunks, embedding = embeddings)
-    
-    # initialize the Azure LLM
-    llm = ChatOpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),  
-        model = os.getenv("OPENAI_DEPLOYMENT_NAME"), 
-        temperature=0)  
-
-    # Configure vector store to act as a retriever (finding similar items, returning top 5)
-    retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': 5})
-
-    # Create a memory buffer to track the conversation
-    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-    
-    # build messages
-    system_template = r'''
-    You are answering questions only concerning the provided content of the input document.  
-    If you are asked a question that is not related to the document you response will be:
-    'The question is not relevant to the domain of interest'.
-    ---------------
-    Context: ```{context}```
-    '''
-
-    user_template = '''
-    Answer questions only concerning the provided content of the input document.  
-    If you are asked a question that is not related to the document you response will be:
-    'The question is not relevant to the domain of interest'. 
-    Here is the user's question: ```{question}```
-    '''
-
-    messages= [
-        SystemMessagePromptTemplate.from_template(system_template),
-        HumanMessagePromptTemplate.from_template(user_template)
-        ]
-
-    qa_prompt = ChatPromptTemplate.from_messages(messages)
-    
-    # Set up conversational retrieval chain
-    crc = ConversationalRetrievalChain.from_llm(
-        llm = llm,
-        retriever = retriever,
-        memory = memory,
-        chain_type = 'stuff',
-        combine_docs_chain_kwargs = {'prompt': qa_prompt },
-        verbose = False)
-    
-
-    while True:
-        new_user_question = input("Please ask your question about the document. If you want to stop type 'exit'.\n")
-        if new_user_question.lower() == "exit":
-            print("You ended the program.  Goodbye!")
-            # removing temporary file with processed data if remove_temp_file==True
-            if remove_temp_file:
-                os.remove(processed_text_file_path)
-            break
-        else:
-            response = answer_question(q = new_user_question, chain = crc)
-            print(f"Answering question: {new_user_question}")
-            # print the response
-            print(f"Here is the response: \n")
-            print(response, "\n")
-
-
 # clear the chat history from streamlit session state
 def clear_history():
     if 'history' in st.session_state:
@@ -268,7 +131,7 @@ def clear_history():
 
 
 if __name__ == "__main__":
-    st.image("imgage2.png")
+    st.image("image2.png")
     st.subheader("Document Knowledge Retrieval Chatbot 🤖")
 
     with st.sidebar:
@@ -298,7 +161,13 @@ if __name__ == "__main__":
                 with open(file_name, 'wb') as f:
                     f.write(bytes_data)
 
-                data = load_document(file_name)
+                processed_text_file_path = process_input_file(file_name)
+
+                data = load_document(processed_text_file_path)
+
+                if data is None:
+                    st.write(f"Failed to load document: {file_name}")
+
                 chunks = chunk_data(data, chunk_size=chunk_size)
                 st.write(f'Chunk size: {chunk_size}, Chunks: {len(chunks)}')
 
@@ -344,7 +213,7 @@ if __name__ == "__main__":
             # Configure vector store to act as a retriever (finding similar items, returning top 5)
         
             st.write(f'k: {k}')
-            #answer = ask_and_get_answer(vector_store, q, k)
+
             # initialize LLM
             llm = ChatOpenAI(
                 api_key = os.getenv("OPENAI_API_KEY"),  
