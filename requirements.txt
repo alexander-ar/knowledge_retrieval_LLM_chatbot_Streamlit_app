@@ -5,7 +5,6 @@ langchain-community
 chromadb
 streamlit
 tiktoken
-argparse
 PyPDF2
 python-docx
 textract
