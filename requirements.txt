@@ -7,5 +7,4 @@ streamlit
 tiktoken
 PyPDF2
 python-docx
-textract
 python-dotenv

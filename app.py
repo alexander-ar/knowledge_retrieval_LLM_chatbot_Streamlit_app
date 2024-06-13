@@ -1,6 +1,5 @@
 # Install all libraries by running in the terminal: pip install -r requirements.txt
 import streamlit as st
-from openai import OpenAI
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
@@ -51,10 +50,10 @@ def process_input_file(input_file_path):
             lines = [p.text for p in doc.paragraphs]
         elif file_extension == '.pdf':
             with open(input_file_path, 'rb') as input_file:
-                reader = PyPDF2.PdfFileReader(input_file)
+                reader = PyPDF2.PdfReader(input_file)
                 lines = []
-                for page_num in range(reader.numPages):
-                    page = reader.getPage(page_num)
+                for page_num in range(len(reader.pages)):
+                    page = reader.pages[page_num] 
                     lines.append(page.extract_text())
         else:
             raise ValueError("Unsupported file format: " + file_extension)
@@ -99,7 +98,7 @@ def calculate_input_embedding_cost(texts):
     # check prices here: https://openai.com/pricing
     # print(f'Total Tokens: {total_tokens}')
     # print(f'Embedding Cost in USD: {total_tokens / 1000 * 0.00002:.6f}')
-    return total_tokens, total_tokens / 1000000 * 10
+    return total_tokens, (total_tokens / 1000000) * 0.02
 
 
 # splitting data in chunks
@@ -114,7 +113,7 @@ def chunk_data(data, chunk_size = 1024, chunk_overlap = 80):
 # create embeddings using OpenAIEmbeddings() and save them in a Chroma vector store
 def create_embeddings(chunks):
     embeddings = OpenAIEmbeddings(
-        model=os.getenv("TEXT_EMBEDDING_MODEL"), 
+        model = os.getenv("TEXT_EMBEDDING_MODEL"), 
         dimensions=1536)  # 512 works as well
     # Create an in-memory Chroma vector store using the provided text chunks 
     # and the embedding model 
@@ -127,11 +126,12 @@ def create_embeddings(chunks):
 # clear the chat history from streamlit session state
 def clear_history():
     if 'history' in st.session_state:
+        # clear history in the Chat History text area
         del st.session_state['history']
 
 
 if __name__ == "__main__":
-    st.image("image2.png")
+    st.image("image6.png")
     st.subheader("Document Knowledge Retrieval Chatbot 🤖")
 
     with st.sidebar:
@@ -144,13 +144,16 @@ if __name__ == "__main__":
         uploaded_file = st.file_uploader('Upload a file:', type=['pdf', 'docx', 'txt'])
 
         # chunk size number widget
-        chunk_size = st.number_input('Chunk size:', min_value=100, max_value=2048, value=1024, on_change=clear_history)
+        chunk_size = st.number_input('Choose the chunk size (min = 100, max = 2048):', min_value=100, max_value=2048, value=1024, on_change=clear_history)
 
         # k number (top results retrieved from text for LLM) input widget
-        k = st.number_input('k', min_value=1, max_value=20, value=3, on_change=clear_history)
+        k = st.number_input('Choose how many top search results are retrieved (min = 1, max = 20)', min_value=1, max_value=20, value=5, on_change=clear_history)
+
+        temperature = st.number_input("Choose LLM model temperature", min_value=0, max_value=2, value=0, on_change=clear_history)
 
         # add data button widget
         add_data = st.button('Add Data', on_click=clear_history)
+
 
         if uploaded_file and add_data: # if the user browsed a file
             with st.spinner('Reading, chunking and embedding file ...'):
@@ -162,13 +165,17 @@ if __name__ == "__main__":
                     f.write(bytes_data)
 
                 processed_text_file_path = process_input_file(file_name)
+                if processed_text_file_path:
+                    st.write(f"Processed input file {file_name}")
 
                 data = load_document(processed_text_file_path)
 
                 if data is None:
                     st.write(f"Failed to load document: {file_name}")
+                else:
+                    st.write(f"Loaded the processed file {file_name}")
 
-                chunks = chunk_data(data, chunk_size=chunk_size)
+                chunks = chunk_data(data, chunk_size = chunk_size)
                 st.write(f'Chunk size: {chunk_size}, Chunks: {len(chunks)}')
 
                 tokens, embedding_cost = calculate_input_embedding_cost(chunks)
@@ -183,13 +190,13 @@ if __name__ == "__main__":
 
 
     # user's question text input widget
-    question = st.text_input('Ask a question about the content of your file:')
+    question = st.text_input('**Ask a question about the content of your file:**')
     if question: # if the user entered a question and hit enter
         # build messages
         system_template = r'''
         You are answering questions only concerning the provided content of the input document.  
         If you are asked a question that is not related to the document you response will be:
-        'The question is not relevant to the domain of interest'.
+        'I can answer only the questions related to the source document!'.
         ---------------
         Context: ```{context}```
         '''
@@ -197,7 +204,7 @@ if __name__ == "__main__":
         user_template = '''
         Answer questions only concerning the provided content of the input document.  
         If you are asked a question that is not related to the document you response will be:
-        'The question is not relevant to the domain of interest'. 
+        'I can answer only the questions related to the source document!'. 
         Here is the user's question: ```{question}```
         '''
 
@@ -210,20 +217,21 @@ if __name__ == "__main__":
         
         if 'vs' in st.session_state: # if there's the vector store (user uploaded, split and embedded a file)
             vector_store = st.session_state.vs
-            # Configure vector store to act as a retriever (finding similar items, returning top 5)
         
-            st.write(f'k: {k}')
+            st.write(f'Retrieving top {k} results from the input text...')
 
             # initialize LLM
             llm = ChatOpenAI(
                 api_key = os.getenv("OPENAI_API_KEY"),  
                 model = os.getenv("OPENAI_DEPLOYMENT_NAME"), 
-                temperature = 0)
+                temperature = temperature)
+            # Configure vector store to act as a retriever (finding similar items, returning top k)
             retriever = vector_store.as_retriever(
                 search_type = 'similarity', 
                 search_kwargs={'k': k})
             # Create a memory buffer to track the conversation
             memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
+            
             # Set up conversational retrieval chain
             crc = ConversationalRetrievalChain.from_llm(
                 llm = llm,
@@ -233,7 +241,8 @@ if __name__ == "__main__":
                 combine_docs_chain_kwargs = {'prompt': qa_prompt },
                 verbose = False)
             
-            response = crc.invoke({'question': question})
+            result = crc.invoke({'question': question})
+            response = result['answer']
 
             # text area widget for the LLM answer
             st.text_area('LLM Answer: ', value = response)
@@ -245,7 +254,7 @@ if __name__ == "__main__":
                 st.session_state.history = ''
 
             # the current question and answer
-            value = f'Q: {q} \nA: {answer}'
+            value = f'Q: {question} \nA: {response}'
 
             st.session_state.history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
             h = st.session_state.history
@@ -253,5 +262,5 @@ if __name__ == "__main__":
             # text area widget for the chat history
             st.text_area(label='Chat History', value=h, key='history', height=400)
 
-# run the app: streamlit run ./chat_with_documents.py
+# run the app: streamlit run app.py
 
