@@ -107,6 +107,8 @@ def chunk_data(data, chunk_size = 1024, chunk_overlap = 80):
         chunk_size = chunk_size, 
         chunk_overlap = chunk_overlap)
     chunks = text_splitter.split_documents(data)
+    if len(chunks) == 0:
+        raise ValueError("Chunking failed - returned zero chunks!")
     return chunks
 
 
