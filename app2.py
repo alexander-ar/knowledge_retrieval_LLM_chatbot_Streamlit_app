@@ -125,73 +125,6 @@ def create_embeddings(chunks):
     return vector_store
 
 
-# clear the chat history from streamlit session state
-def clear_history():
-    if 'history' in st.session_state:
-        # clear history in the Chat History text area
-        del st.session_state['history']
-    if 'memory' in st.session_state:
-        # clear conversation memory
-        del st.session_state['memory']
-    if 'vs' in st.session_state:
-        del st.session_state['vs']
-    if 'crc_chain' in st.session_state:
-        del st.session_state['crc_chain']
-
-
-# show variables 
-def show_variables():
-    try:
-        if uploaded_file:
-            st.write(f"current uploaded file is {uploaded_file}")
-    except:
-        st.write("Variable uploaded_file is not currently assigned")
-    try:
-        if crc_chain:
-            st.write(f"current crc_chain is {crc_chain}")
-    except:
-        st.write("Variable crc_chain is not currently assigned")
-    try:
-        if vs:
-            st.write(f"current vs is {vs}")
-    except:
-        st.write("Variable vs is not currently assigned")
-    try:
-        if memory:
-            st.write(f"current memory is {memory}")
-    except:
-        st.write("Variable memory is not currently assigned")
-    try:
-        if h:
-            st.write(f"current history is {h}")
-    except:
-        st.write("History is not currently assigned to h variable")
-    try:
-        if st.session_state['crc_chain']:
-            st.write(f"current Session State crc_chain is {st.session_state['crc_chain']}")
-    except:
-        st.write("Session State does not have crc_chain variable")
-    try:
-        if st.session_state['vs']:
-            st.write(f"current Session State vs is {st.session_state['vs']}")
-    except:
-        st.write("Session State does not have vs variable")
-    try:
-        if st.session_state['memory']:
-            st.write(f"current Session State memory is {st.session_state['memory']}")
-    except:
-        st.write("Session State does not have memory variable")
-    try:
-        if st.session_state['history']:
-            st.write(f"current Session State history is {st.session_state['history']}")
-    except:
-        st.write("Session State does not have history variable")
-
-def app_stop():
-    st.stop()
-
-def app_rerun():
-    st.rerun()
 
 
 if __name__ == "__main__":
@@ -217,15 +150,6 @@ if __name__ == "__main__":
 
         # add data button widget
         add_data = st.button('Add Data', on_click = clear_history)
-
-        # show key variables
-        show_vars = st.button('Show Current Variables', on_click = show_variables)
-
-        # rerun app with st.rerun()
-        rerun_app = st.button('Rerun App', on_click = app_rerun)
-
-        # stop app with st.stop()
-        stop_app = st.button('Stop App', on_click = app_stop)
 
 
         if uploaded_file and add_data: # if the user browsed a file
@@ -258,8 +182,8 @@ if __name__ == "__main__":
                 vector_store = create_embeddings(chunks)
 
                 # saving the vector store in the streamlit session state (to be persistent between reruns)
-                st.session_state.vs = vector_store
-                st.success('File uploaded, chunked and embedded successfully.')
+                # st.session_state.vs = vector_store
+                # st.success('File uploaded, chunked and embedded successfully.')
 
 
     # user's question text input widget
@@ -305,10 +229,10 @@ if __name__ == "__main__":
             # Create a memory buffer to track the conversation
             memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
 
-            if 'memory' not in st.session_state:
-                st.session_state.memory = memory
+            # if 'memory' not in st.session_state:
+            #     st.session_state.memory = memory
 
-            del memory
+            # del memory
             
             # Set up conversational retrieval chain
             crc = ConversationalRetrievalChain.from_llm(
@@ -319,10 +243,10 @@ if __name__ == "__main__":
                 combine_docs_chain_kwargs = {'prompt': qa_prompt },
                 verbose = False)
             
-            if 'crc_chain' not in st.session_state:
-                st.session_state.crc_chain = crc
+            # if 'crc_chain' not in st.session_state:
+            #     st.session_state.crc_chain = crc
 
-            del crc
+            # del crc
             
             result = st.session_state.crc_chain.invoke({'question': question})
             response = result['answer']
@@ -333,17 +257,19 @@ if __name__ == "__main__":
             st.divider()
 
             # if there's no chat history in the session state, create it
-            if 'history' not in st.session_state:
-                st.session_state.history = ''
+            # if 'history' not in st.session_state:
+            #     st.session_state.history = ''
 
             # the current question and answer
             value = f'Q: {question} \nA: {response}'
 
-            st.session_state.history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
-            h = st.session_state.history
+            # st.session_state.history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
+            # h = st.session_state.history
+
+            history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
 
             # text area widget for the chat history
-            st.text_area(label='Chat History', value=h, key='history', height=400)
+            st.text_area(label='Chat History', value = history, key = 'history', height = 400)
 
 # run the app: streamlit run app.py
 
