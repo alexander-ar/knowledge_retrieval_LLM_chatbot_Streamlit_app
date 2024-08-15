@@ -124,7 +124,20 @@ def create_embeddings(chunks):
         embedding = embeddings)
     return vector_store
 
-
+# clear the chat history from streamlit session state
+def clear_history():
+    try:
+        if history:
+            del history
+    except:
+        st.write('No history available')
+    if 'vs' in st.session_state:
+        del st.session_state['vs']
+    try:
+        if vector_store:
+            del vector_store
+    except:
+        st.write('Variable vector_store is NULL')
 
 
 if __name__ == "__main__":
@@ -150,6 +163,21 @@ if __name__ == "__main__":
 
         # add data button widget
         add_data = st.button('Add Data', on_click = clear_history)
+
+        exit_process = st.sidebar.button("Delete current process")
+        if exit_process:
+            import time
+            import psutil
+            import keyboard
+            st.write(f'Deleting current process')
+            # Give a bit of delay for user experience
+            time.sleep(5)
+            # Close streamlit browser tab
+            keyboard.press_and_release('ctrl+w')
+            # Terminate streamlit python process
+            pid = os.getpid()
+            p = psutil.Process(pid)
+            p.terminate()
 
 
         if uploaded_file and add_data: # if the user browsed a file
@@ -182,8 +210,8 @@ if __name__ == "__main__":
                 vector_store = create_embeddings(chunks)
 
                 # saving the vector store in the streamlit session state (to be persistent between reruns)
-                # st.session_state.vs = vector_store
-                # st.success('File uploaded, chunked and embedded successfully.')
+                st.session_state.vs = vector_store
+                st.success('File uploaded, chunked and embedded successfully.')
 
 
     # user's question text input widget
@@ -215,61 +243,62 @@ if __name__ == "__main__":
         if 'vs' in st.session_state: # if there's the vector store (user uploaded, split and embedded a file)
             vector_store = st.session_state.vs
         
-            st.write(f'Retrieving top {k} results from the input text...')
+        st.write(f'Retrieving top {k} results from the input text...')
 
-            # initialize LLM
-            llm = ChatOpenAI(
-                api_key = os.getenv("OPENAI_API_KEY"),  
-                model = os.getenv("OPENAI_DEPLOYMENT_NAME"), 
-                temperature = temperature)
-            # Configure vector store to act as a retriever (finding similar items, returning top k)
-            retriever = vector_store.as_retriever(
-                search_type = 'similarity', 
-                search_kwargs={'k': k})
-            # Create a memory buffer to track the conversation
-            memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
+        # initialize LLM
+        llm = ChatOpenAI(
+            api_key = os.getenv("OPENAI_API_KEY"),  
+            model = os.getenv("OPENAI_DEPLOYMENT_NAME"), 
+            temperature = temperature)
+        # Configure vector store to act as a retriever (finding similar items, returning top k)
+        retriever = vector_store.as_retriever(
+            search_type = 'similarity', 
+            search_kwargs={'k': k})
+        # Create a memory buffer to track the conversation
+        memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
 
-            # if 'memory' not in st.session_state:
-            #     st.session_state.memory = memory
+        # if 'memory' not in st.session_state:
+        #     st.session_state.memory = memory
 
-            # del memory
-            
-            # Set up conversational retrieval chain
-            crc = ConversationalRetrievalChain.from_llm(
-                llm = llm,
-                retriever = retriever,
-                memory = st.session_state.memory,
-                chain_type = 'stuff',
-                combine_docs_chain_kwargs = {'prompt': qa_prompt },
-                verbose = False)
-            
-            # if 'crc_chain' not in st.session_state:
-            #     st.session_state.crc_chain = crc
+        # del memory
+        
+        # Set up conversational retrieval chain
+        crc = ConversationalRetrievalChain.from_llm(
+            llm = llm,
+            retriever = retriever,
+            memory = memory,
+            chain_type = 'stuff',
+            combine_docs_chain_kwargs = {'prompt': qa_prompt },
+            verbose = False)
+        
+        # if 'crc_chain' not in st.session_state:
+        #     st.session_state.crc_chain = crc
 
-            # del crc
-            
-            result = st.session_state.crc_chain.invoke({'question': question})
-            response = result['answer']
+        # del crc
+        
+        result = crc.invoke({'question': question})
+        response = result['answer']
 
-            # text area widget for the LLM answer
-            st.text_area('LLM Answer: ', value = response)
+        # text area widget for the LLM answer
+        st.text_area('LLM Answer: ', value = response)
 
-            st.divider()
+        st.divider()
 
-            # if there's no chat history in the session state, create it
-            # if 'history' not in st.session_state:
-            #     st.session_state.history = ''
+        # if there's no chat history in the session state, create it
+        # if 'history' not in st.session_state:
+        #     st.session_state.history = ''
+        history = ''
 
-            # the current question and answer
-            value = f'Q: {question} \nA: {response}'
+        # the current question and answer
+        value = f'Q: {question} \nA: {response}'
 
-            # st.session_state.history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
-            # h = st.session_state.history
+        # st.session_state.history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
+        # h = st.session_state.history
 
-            history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
+        history = f'{value} \n {"-" * 100} \n {history}'
 
-            # text area widget for the chat history
-            st.text_area(label='Chat History', value = history, key = 'history', height = 400)
+        # text area widget for the chat history
+        st.text_area(label='Chat History', value = history, key = 'history', height = 400)
 
 # run the app: streamlit run app.py
 
