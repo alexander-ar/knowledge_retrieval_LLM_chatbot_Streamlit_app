@@ -1,7 +1,7 @@
 openai
 langchain
 langchain_openai
-langchain-community
+langchain_community
 chromadb
 streamlit
 tiktoken
@@ -9,3 +9,4 @@ PyPDF2
 python-docx
 python-dotenv
 pycryptodome
+pinecone
