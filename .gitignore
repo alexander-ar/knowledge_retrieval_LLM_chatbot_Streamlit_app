@@ -1,2 +1,5 @@
 # environmental variables
 *.env
+.venv
+# Jupyter Notebook
+.ipynb_checkpoints
